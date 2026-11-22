@@ -100,13 +100,17 @@ export function cleanUnits(raw) {
     const bhk = bhkOf(u.type);
     if (bhk == null && !RESIDENTIAL.test(u.type)) continue;
     if (/shop|office|commercial|retail|plot|site|parking/i.test(u.type)) continue;
+    // Largest believable carpet area per flat for this type; bigger numbers are
+    // totals for the whole block or typos (e.g. 9,505 sq ft for a 2 BHK).
+    const ceil = bhk == null ? 5000 : [1200, 1200, 2200, 3500, 6000, 10000][Math.min(bhk, 5)];
+    const ok = (v) => PLAUSIBLE(v) && v <= ceil;
     let per = u.carpetSqftAvg;
-    if (!PLAUSIBLE(per) && per && u.count) {
+    if (!ok(per) && per && u.count && per < 180) {
       const alt = per * u.count; // the total was really one flat's area
-      per = PLAUSIBLE(alt) ? Math.round(alt) : null;
-    } else if (!PLAUSIBLE(per)) per = null;
-    let min = PLAUSIBLE(u.carpetSqftMin) ? u.carpetSqftMin : null;
-    let max = PLAUSIBLE(u.carpetSqftMax) ? u.carpetSqftMax : null;
+      per = ok(alt) ? Math.round(alt) : null;
+    } else if (!ok(per)) per = null;
+    let min = ok(u.carpetSqftMin) ? u.carpetSqftMin : null;
+    let max = ok(u.carpetSqftMax) ? u.carpetSqftMax : null;
     if (min && max && min > max) [min, max] = [max, min];
     if (min && max) {
       // A per-flat table beats an average derived from totals.
