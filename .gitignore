@@ -4,7 +4,9 @@ dist/
 .env.*
 !.env.example
 # Google results may only be cached for 30 days, so they're never committed.
-data/google/
+# Place IDs are the exception: Google allows storing them indefinitely.
+data/google/*
+!data/google/places.json
 # Built by pipeline/src/build.js
 web/public/data/projects.json
 web/public/data/meta.json
