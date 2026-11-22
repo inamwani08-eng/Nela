@@ -130,6 +130,17 @@ export function applyFilters(projects: Project[], f: Filters): Project[] {
     if (by === 'newest') return (b.approvedOn || '').localeCompare(a.approvedOn || '');
     // possession: ready first, then soonest
     if (a.ready !== b.ready) return a.ready ? -1 : 1;
+    // Projects with flat sizes on file are more useful, so they lead within each group.
+    const full = (p: Project) => (p.carpetMin && p.bhk.length ? 0 : 1);
+    if (a.ready) {
+      // Completed first, then the most recently due (long-overdue ones sink).
+      if ((a.readyState === 'completed') !== (b.readyState === 'completed')) return a.readyState === 'completed' ? -1 : 1;
+      if (full(a) !== full(b)) return full(a) - full(b);
+      return (b.possession || '').localeCompare(a.possession || '');
+    }
+    const ya = (a.possession || '9999').slice(0, 4), yb = (b.possession || '9999').slice(0, 4);
+    if (ya !== yb) return ya.localeCompare(yb);
+    if (full(a) !== full(b)) return full(a) - full(b);
     return (a.possession || '9999').localeCompare(b.possession || '9999');
   });
   return res;
