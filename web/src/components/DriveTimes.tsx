@@ -1,7 +1,6 @@
 import { useState } from 'react';
-import { useMapsLibrary } from '@vis.gl/react-google-maps';
 import type { Hub, Project } from '../lib/types';
-import { hasMaps, nextWeekdayAt9 } from '../lib/maps';
+import { hasMaps, MAPS_KEY, nextWeekdayAt9 } from '../lib/maps';
 import { km } from '../lib/format';
 import { Icon } from './ui';
 
@@ -12,29 +11,45 @@ import { Icon } from './ui';
  */
 type Mins = Record<string, number | null>;
 
+const pt = (lat: number, lng: number) => ({ waypoint: { location: { latLng: { latitude: lat, longitude: lng } } } });
+
+/** Peak-hour drive times from Google's Routes API (the old Distance Matrix API is closed to new projects). */
+async function routeMatrix(p: Project, hubs: Hub[]): Promise<Mins> {
+  const res = await fetch('https://routes.googleapis.com/distanceMatrix/v2:computeRouteMatrix', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'X-Goog-Api-Key': MAPS_KEY,
+      'X-Goog-FieldMask': 'originIndex,destinationIndex,duration,condition',
+    },
+    body: JSON.stringify({
+      origins: [pt(p.lat!, p.lng!)],
+      destinations: hubs.map((h) => pt(h.lat, h.lng)),
+      travelMode: 'DRIVE',
+      routingPreference: 'TRAFFIC_AWARE_OPTIMAL',
+      departureTime: nextWeekdayAt9().toISOString(),
+    }),
+  });
+  if (!res.ok) throw new Error(`Routes API ${res.status}`);
+  const rows: { destinationIndex?: number; duration?: string; condition?: string }[] = await res.json();
+  const out: Mins = {};
+  for (const r of rows) {
+    const h = hubs[r.destinationIndex ?? 0];
+    out[h.id] = r.condition === 'ROUTE_EXISTS' && r.duration ? Math.round(parseInt(r.duration, 10) / 60) : null;
+  }
+  return out;
+}
+
 function LiveDriveButton({ p, sorted, onDone }: { p: Project; sorted: Hub[]; onDone: (m: Mins) => void }) {
-  const routes = useMapsLibrary('routes');
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
 
   async function load() {
-    if (!routes || !p.lat) return;
+    if (!p.lat) return;
     setBusy(true);
     setErr(null);
     try {
-      const svc = new routes.DistanceMatrixService();
-      const res = await svc.getDistanceMatrix({
-        origins: [{ lat: p.lat, lng: p.lng! }],
-        destinations: sorted.map((h) => ({ lat: h.lat, lng: h.lng })),
-        travelMode: google.maps.TravelMode.DRIVING,
-        drivingOptions: { departureTime: nextWeekdayAt9(), trafficModel: google.maps.TrafficModel.BEST_GUESS },
-      });
-      const out: Mins = {};
-      res.rows[0].elements.forEach((e, i) => {
-        const d = e.duration_in_traffic || e.duration;
-        out[sorted[i].id] = e.status === 'OK' && d ? Math.round(d.value / 60) : null;
-      });
-      onDone(out);
+      onDone(await routeMatrix(p, sorted));
     } catch {
       setErr("Couldn't get drive times right now.");
     } finally {
@@ -44,7 +59,7 @@ function LiveDriveButton({ p, sorted, onDone }: { p: Project; sorted: Hub[]; onD
 
   return (
     <>
-      <button type="button" className="btn btn-quiet" onClick={load} disabled={busy || !routes}>
+      <button type="button" className="btn btn-quiet" onClick={load} disabled={busy}>
         <Icon.car /> {busy ? 'Checking traffic…' : 'Show 9 AM drive times'}
       </button>
       {err && <p className="fine tone-bad">{err}</p>}
