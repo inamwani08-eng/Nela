@@ -40,7 +40,7 @@ jobs:
       - run: npm ci
         working-directory: pipeline
 
-      # Google results are cached between runs, never committed (Google's
+      # Google results are cached between runs. Only place IDs are committed (Google
       # terms limit storing them; the scripts expire entries after 30 days).
       - uses: actions/cache@v4
         with:
@@ -70,7 +70,7 @@ jobs:
         run: |
           git config user.name "nela-bot"
           git config user.email "nela-bot@users.noreply.github.com"
-          git add data/rera-list.json data/details
+          git add data/rera-list.json data/details data/google/places.json
           git diff --cached --quiet || git commit -m "Nightly RERA refresh $(date -u +%F)"
           git push || echo "Nothing pushed"
 
