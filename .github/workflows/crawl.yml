@@ -7,9 +7,12 @@ name: RERA crawl
 #
 # Only schedule and manual runs: never on pull requests, so code from
 # forks can't run on that computer.
+#
+# The nightly schedule is off until a runner is installed (see README);
+# until then RERA is refreshed by hand. To turn it on, add back:
+#   schedule:
+#     - cron: '30 20 * * *' # 02:00 IST
 on:
-  schedule:
-    - cron: '30 20 * * *' # 02:00 IST
   workflow_dispatch:
 
 permissions:
