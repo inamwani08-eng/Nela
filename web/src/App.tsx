@@ -1,5 +1,5 @@
 import { lazy, Suspense, type ReactNode } from 'react';
-import { BrowserRouter, Link, Route, Routes } from 'react-router-dom';
+import { BrowserRouter, HashRouter, Link, Route, Routes } from 'react-router-dom';
 import { APIProvider } from '@vis.gl/react-google-maps';
 import { DataProvider } from './lib/data';
 import { ListsProvider } from './lib/shortlist';
@@ -25,9 +25,13 @@ function Maps({ children }: { children: ReactNode }) {
   );
 }
 
+// Hash routing for hosts that can't send every path to index.html (e.g. previews).
+const Router = ({ children }: { children: ReactNode }) =>
+  import.meta.env.VITE_HASH_ROUTER ? <HashRouter>{children}</HashRouter> : <BrowserRouter basename={import.meta.env.BASE_URL}>{children}</BrowserRouter>;
+
 export default function App() {
   return (
-    <BrowserRouter basename={import.meta.env.BASE_URL}>
+    <Router>
       <DataProvider>
         <ListsProvider>
           <Maps>
@@ -53,6 +57,6 @@ export default function App() {
           </Maps>
         </ListsProvider>
       </DataProvider>
-    </BrowserRouter>
+    </Router>
   );
 }
