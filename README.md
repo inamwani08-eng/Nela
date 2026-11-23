@@ -44,7 +44,7 @@ The schedule is off until that runner exists.
 **Manual refresh (no runner).** From any browser in India:
 `node pipeline/tools/browser-crawl.mjs > crawl.js`, run `crawl.js` in the devtools console on a
 rera.karnataka.gov.in page, wait for `window.__nela.phase === 'done'` (it downloads
-`nela-rera-update.json`), then `node pipeline/tools/import-browser-crawl.mjs <file>`, `npm run build`
+`nela-rera-update.json`; if no file appears, run `document.querySelector('a[download]').click()`), then `node pipeline/tools/import-browser-crawl.mjs <file>`, `npm run build`
 in `pipeline/`, and push `data/`. Only new or changed projects are fetched.
 
 ### Setting up the crawl runner (Windows PC, once)
