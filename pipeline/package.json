@@ -1,0 +1,16 @@
+{
+  "name": "nela-pipeline",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "crawl": "node src/crawl.js",
+    "geocode": "node src/geocode.js",
+    "places": "node src/places.js",
+    "build": "node src/build.js",
+    "refresh": "node src/crawl.js && node src/geocode.js && node src/places.js && node src/build.js",
+    "test": "node --test test/*.test.js"
+  },
+  "dependencies": {
+    "linkedom": "^0.18.5"
+  }
+}

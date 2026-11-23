@@ -1,0 +1,52 @@
+name: RERA crawl
+
+# RERA Karnataka blocks servers outside India, so this job runs on a
+# self-hosted runner on a computer in India (labels: self-hosted, Windows,
+# nela-rera). It only commits RERA data; "Nightly refresh and deploy"
+# starts when it finishes and rebuilds the site.
+#
+# Only schedule and manual runs: never on pull requests, so code from
+# forks can't run on that computer.
+#
+# The nightly schedule is off until a runner is installed (see README);
+# until then RERA is refreshed by hand. To turn it on, add back:
+#   schedule:
+#     - cron: '30 20 * * *' # 02:00 IST
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: rera-crawl
+  cancel-in-progress: false
+
+jobs:
+  crawl:
+    runs-on: [self-hosted, Windows, nela-rera]
+    timeout-minutes: 300
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - run: npm ci
+        working-directory: pipeline
+      - name: Crawl RERA (slow and polite)
+        working-directory: pipeline
+        run: node src/crawl.js
+      - name: Commit RERA changes
+        shell: pwsh
+        run: |
+          git config user.name "nela-bot"
+          git config user.email "nela-bot@users.noreply.github.com"
+          git add data/rera-list.json data/details
+          git diff --cached --quiet
+          if ($LASTEXITCODE -ne 0) {
+            git commit -m "RERA refresh $(Get-Date -Format yyyy-MM-dd)"
+            git push
+          } else {
+            Write-Output "No RERA changes"
+          }
+          exit 0

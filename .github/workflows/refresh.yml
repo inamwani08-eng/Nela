@@ -1,0 +1,81 @@
+name: Nightly refresh and deploy
+
+# Runs after the RERA crawl (which needs a computer in India, see
+# crawl.yml), on manual runs, and on pushes: refreshes Google lookups past
+# their cache limit, rebuilds the site's data and deploys to GitHub Pages.
+on:
+  workflow_run:
+    workflows: ['RERA crawl']
+    types: [completed]
+  workflow_dispatch:
+  push:
+    branches: [main, claude/nela-v1]
+    paths: ['web/**', 'pipeline/**', 'data/**', '.github/workflows/refresh.yml']
+
+permissions:
+  contents: write
+  pages: write
+  id-token: write
+
+concurrency:
+  group: refresh
+  cancel-in-progress: false
+
+jobs:
+  refresh:
+    runs-on: ubuntu-latest
+    timeout-minutes: 300
+    environment:
+      name: github-pages
+      url: ${{ steps.deploy.outputs.page_url }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - run: npm ci
+        working-directory: pipeline
+
+      # Google results are cached between runs. Only place IDs are committed (Google
+      # terms limit storing them; the scripts expire entries after 30 days).
+      - uses: actions/cache@v4
+        with:
+          path: data/google
+          key: google-${{ github.run_id }}
+          restore-keys: google-
+
+      - name: Google lookups
+        working-directory: pipeline
+        env:
+          GOOGLE_MAPS_API_KEY: ${{ secrets.GOOGLE_MAPS_API_KEY }}
+        run: node src/geocode.js && node src/places.js
+
+      - name: Build site data
+        working-directory: pipeline
+        run: node src/build.js
+
+      - name: Commit refreshed place IDs
+        if: github.event_name != 'push'
+        run: |
+          git config user.name "nela-bot"
+          git config user.email "nela-bot@users.noreply.github.com"
+          git add data/google/places.json
+          git diff --cached --quiet || git commit -m "Refresh Google place IDs $(date -u +%F)"
+          git push || echo "Nothing pushed"
+
+      - name: Build website
+        working-directory: web
+        env:
+          VITE_GOOGLE_MAPS_API_KEY: ${{ secrets.VITE_GOOGLE_MAPS_API_KEY }}
+          VITE_GOOGLE_MAP_ID: ${{ vars.VITE_GOOGLE_MAP_ID }}
+          VITE_BASE: ${{ vars.SITE_BASE || format('/{0}/', github.event.repository.name) }}
+        run: |
+          npm ci
+          npm run build
+          cp dist/index.html dist/404.html
+
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: web/dist
+      - uses: actions/deploy-pages@v4
+        id: deploy
