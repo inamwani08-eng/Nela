@@ -1,19 +1,15 @@
 name: Nightly refresh and deploy
 
-# Every night: re-read the RERA list, fetch details only for new or changed
-# projects, refresh Google lookups past their cache limit, rebuild the
-# site's data, commit RERA changes, and deploy to GitHub Pages.
+# Runs after the RERA crawl (which needs a computer in India, see
+# crawl.yml), on manual runs, and on pushes: refreshes Google lookups past
+# their cache limit, rebuilds the site's data and deploys to GitHub Pages.
 on:
-  schedule:
-    - cron: '30 20 * * *' # 02:00 IST
+  workflow_run:
+    workflows: ['RERA crawl']
+    types: [completed]
   workflow_dispatch:
-    inputs:
-      skip_crawl:
-        description: 'Deploy without crawling RERA'
-        type: boolean
-        default: false
   push:
-    branches: [main]
+    branches: [main, claude/nela-v1]
     paths: ['web/**', 'pipeline/**', 'data/**', '.github/workflows/refresh.yml']
 
 permissions:
@@ -48,13 +44,6 @@ jobs:
           key: google-${{ github.run_id }}
           restore-keys: google-
 
-      - name: Crawl RERA (only on schedule or manual run)
-        if: github.event_name != 'push' && inputs.skip_crawl != true
-        working-directory: pipeline
-        continue-on-error: true
-        id: crawl
-        run: node src/crawl.js
-
       - name: Google lookups
         working-directory: pipeline
         env:
@@ -65,13 +54,13 @@ jobs:
         working-directory: pipeline
         run: node src/build.js
 
-      - name: Commit RERA changes
+      - name: Commit refreshed place IDs
         if: github.event_name != 'push'
         run: |
           git config user.name "nela-bot"
           git config user.email "nela-bot@users.noreply.github.com"
-          git add data/rera-list.json data/details data/google/places.json
-          git diff --cached --quiet || git commit -m "Nightly RERA refresh $(date -u +%F)"
+          git add data/google/places.json
+          git diff --cached --quiet || git commit -m "Refresh Google place IDs $(date -u +%F)"
           git push || echo "Nothing pushed"
 
       - name: Build website
@@ -90,8 +79,3 @@ jobs:
           path: web/dist
       - uses: actions/deploy-pages@v4
         id: deploy
-
-      - name: Report crawl problems
-        if: steps.crawl.outcome == 'failure'
-        run: |
-          echo "::warning::RERA crawl failed on this runner. RERA Karnataka may block non-Indian servers; run 'npm run refresh' in pipeline/ from a machine in India instead."
